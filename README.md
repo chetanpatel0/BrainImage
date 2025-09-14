@@ -4,7 +4,9 @@ BrainImage is a powerful, 100% offline web application designed for the ultra-se
 
 The core principle of BrainImage is **absolute privacy and security**, achieved without ever needing an internet connection or sending your data to a server.
 
-![BrainImage Screenshot](https://i.imgur.com/your-brainimage-screenshot.png) <!-- Optional: Add a screenshot of BrainImage -->
+![BrainImage Screenshot] ![Image](https://github.com/user-attachments/assets/aff0a2c5-0cba-4b0a-955d-72816fae4755)
+![Image](https://github.com/user-attachments/assets/4a21ed47-b1fd-400b-8671-582dffe0f9f0)
+![Image](https://github.com/user-attachments/assets/a653c528-baf0-4ab9-85f1-38673d10a2ca)
 
 ---
 

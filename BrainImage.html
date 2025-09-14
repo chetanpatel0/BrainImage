@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>BrainImage - Secure Image Locker</title>
+    <!-- The CryptoJS library will be fetched once by the creator and embedded in the generated file -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- SortableJS for drag-and-drop reordering -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style id="main-style">
+        /* General Styles & Resets */
+        :root {
+            --primary-color: #007bff;
+            --primary-glow: rgba(0, 123, 255, 0.4);
+            --secondary-color: #6c757d;
+            --background-color: #f8f9fa;
+            --text-color: #212529;
+            --card-bg: #ffffff;
+            --border-color: #dee2e6;
+            --success-color: #28a745;
+            --success-glow: rgba(40, 167, 69, 0.5);
+            --danger-color: #dc3545;
+            --shadow: 0 4px 8px rgba(0,0,0,0.1);
+            --transition-speed: 0.3s;
+        }
+
+        [data-theme="dark"] {
+            --primary-color: #4da3ff;
+            --primary-glow: rgba(77, 163, 255, 0.4);
+            --secondary-color: #8c96a1;
+            --background-color: #1a1a1a;
+            --text-color: #f8f9fa;
+            --card-bg: #2c2c2c;
+            --border-color: #444;
+            --success-color: #31c456;
+            --success-glow: rgba(49, 196, 86, 0.5);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+            line-height: 1.6;
+        }
+        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+
+        /* --- CREATOR UI --- */
+        #creator-app { display: flex; flex-direction: column; gap: 2rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; border-bottom: 2px solid var(--border-color); }
+        .header h1 { font-size: 2.5rem; color: var(--primary-color); }
+        .step-card { background-color: var(--card-bg); border-radius: 12px; padding: 2rem; box-shadow: var(--shadow); border: 1px solid var(--border-color); transition: all var(--transition-speed); }
+        .step-card h2 { margin-bottom: 1.5rem; color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        .theme-switch-wrapper { display: flex; align-items: center; }
+        .theme-switch { display: inline-block; height: 34px; position: relative; width: 60px; }
+        .theme-switch input { display:none; }
+        .slider { background-color: #ccc; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; }
+        .slider:before { background-color: #fff; bottom: 4px; content: ""; height: 26px; left: 4px; position: absolute; transition: .4s; width: 26px; }
+        input:checked + .slider { background-color: var(--primary-color); }
+        input:checked + .slider:before { transform: translateX(26px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
+
+        /* Step 1: Upload & Reorder */
+        #drop-area { border: 3px dashed var(--border-color); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color var(--transition-speed), background-color var(--transition-speed); }
+        #drop-area.highlight { border-color: var(--primary-color); background-color: rgba(0, 123, 255, 0.1); }
+        .file-btn { background-color: var(--primary-color); color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; transition: background-color var(--transition-speed); position: relative; }
+        .file-btn:hover { background-color: #0056b3; }
+        #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+        .thumbnail { position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: grab; transition: transform 0.2s, box-shadow 0.2s; border: 3px solid transparent; background-color: var(--border-color); }
+        .thumbnail.selected { border-color: var(--primary-color); box-shadow: 0 0 10px var(--primary-glow); }
+        .thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+        .thumbnail .remove-btn { position: absolute; top: 5px; right: 5px; background-color: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; line-height: 1; z-index: 10; }
+        .thumbnail .thumb-spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; z-index: 5; }
+        #reorder-hint { font-size: 0.9rem; color: var(--secondary-color); margin-top: 1rem; text-align: center; }
+
+        /* Forms */
+        .form-group { margin-bottom: 1.5rem; }
+        label, .label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        input[type="password"], input[type="text"], input[type="number"], input[type="datetime-local"], input[type="email"], input[type="tel"], select, textarea { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); background-color: var(--background-color); color: var(--text-color); border-radius: 6px; font-size: 1rem; }
+        textarea { resize: vertical; min-height: 80px; }
+        .options-grid { display: flex; gap: 1rem; margin-bottom: 1rem; }
+        .options-grid button { flex: 1; padding: 0.75rem; border: 2px solid var(--border-color); background-color: transparent; color: var(--text-color); border-radius: 6px; cursor: pointer; transition: all var(--transition-speed); }
+        .options-grid button.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
+        #pin-input-container, #time-period-container, #self-destruct-container { display: none; }
+        .rule-checkbox { display: flex; align-items: center; gap: 0.75rem; background-color: rgba(128,128,128,0.1); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; }
+        .rule-checkbox input { width: 1.2em; height: 1.2em; }
+        
+        /* Buttons with Spinners */
+        .spinner { display: none; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        .file-btn.loading .spinner { display: inline-block; vertical-align: middle; margin-right: 10px; }
+        .file-btn.loading span { vertical-align: middle; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* Create Button */
+        #create-file-btn { width: 100%; padding: 1rem; font-size: 1.2rem; font-weight: bold; background-color: var(--success-color); }
+        #create-file-btn.loading { animation: glow 1.5s infinite alternate; cursor: wait; }
+        #create-file-btn:disabled { background-color: var(--secondary-color); cursor: not-allowed; animation: none; }
+        #progress-text { margin-top: 1rem; text-align: center; color: var(--secondary-color); font-weight: 500; height: 1.2em; }
+        @keyframes glow { from { box-shadow: 0 0 5px var(--success-glow); } to { box-shadow: 0 0 20px var(--success-glow), 0 0 30px var(--success-glow); } }
+
+        /* Modal (Privacy & Viewer Info) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-overlay.visible { display: flex; }
+        .modal-content { background: var(--card-bg); padding: 2rem; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative; }
+        .modal-content h2 { color: var(--primary-color); margin-bottom: 1rem; }
+        .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color); }
+        .viewer-body .modal-content { background: #2c2c2c; color: #f8f9fa; }
+        .viewer-body .modal-close { color: #f8f9fa; }
+        
+        /* Footer */
+        .footer { text-align: center; margin-top: 3rem; padding: 2rem 1rem; border-top: 1px solid var(--border-color); color: var(--secondary-color); }
+        .footer p { margin-bottom: 1rem; }
+        .footer a { color: var(--primary-color); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .social-links a { margin: 0 0.5rem; }
+        #privacy-policy-link { cursor: pointer; }
+
+        /* --- VIEWER UI --- */
+        .viewer-body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #1a1a1a; color: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 1rem; }
+        .unlock-container, .message-container { background-color: #2c2c2c; padding: 2rem; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); width: 100%; max-width: 450px; }
+        .creator-info-box { border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-top: 2rem; text-align: left; font-size: 0.9rem; }
+        .creator-info-box h3 { color: var(--primary-color); margin-bottom: 1rem; text-align: center; }
+        .creator-info-box p { margin-bottom: 0.5rem; word-wrap: break-word; }
+        .creator-info-box a { color: var(--primary-color); }
+        .viewer-gallery { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.97); flex-direction: column; justify-content: center; align-items: center; z-index: 1000; touch-action: none; padding: 50px 0 80px 0; }
+        .viewer-header { color: #ccc; padding: 0.5rem 1rem; width: 100%; text-align: center; position: absolute; top: 0; display: flex; justify-content: space-between; align-items: center; }
+        .header-left-controls, .header-right-controls { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+        #image-name { font-weight: bold; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; padding: 0 1rem; flex-grow: 1; }
+        #timer { font-size: 1.2rem; font-variant-numeric: tabular-nums; background: rgba(0,0,0,0.5); padding: 0.3rem 0.6rem; border-radius: 6px; }
+        .icon-btn { cursor: pointer; font-size: 1.5rem; padding: 0.5rem; line-height: 1; border: none; background: none; color: #fff; }
+        .viewer-image-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; overflow: hidden; }
+        .viewer-gallery img { max-width: 100%; max-height: 100%; user-select: none; -webkit-user-drag: none; pointer-events: none; border-radius: 8px; transition: transform 0.2s ease-out; }
+        .viewer-controls { position: absolute; bottom: 1.5rem; left: 50%; transform: translateX(-50%); display: flex; justify-content: center; align-items: center; gap: 1rem; padding: 0.5rem 1rem; width: auto; background: rgba(0,0,0,0.3); border-radius: 12px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+        .nav-btn { background: rgba(255,255,255,0.1); color: white; border: none; font-size: 2rem; padding: 0.5rem 1.5rem; cursor: pointer; border-radius: 8px; transition: background-color 0.2s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.2); }
+        .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .zoom-controls { display: flex; gap: 0.5rem; }
+        .zoom-controls .nav-btn { font-size: 1.2rem; padding: 0.5rem 1rem; }
+    </style>
+</head>
+<body data-theme="light">
+
+    <div id="creator-app" class="container">
+        <header class="header"><h1>Brain_Image</h1><div class="theme-switch-wrapper"><label class="theme-switch" for="theme-checkbox"><input type="checkbox" id="theme-checkbox" /><div class="slider round"></div></label></div></header>
+        <div class="step-card"><h2>Step 1: Upload Images</h2><div id="drop-area"><input type="file" id="file-elem" multiple accept="image/*" style="display:none"><p>Drag & drop images here or</p><button class="file-btn" id="select-files-btn"><span>Select Files</span></button></div><div id="gallery"></div><p id="reorder-hint">Images are automatically compressed and resized for performance. On desktop, click an image and use Up/Down arrows to reorder. On mobile, just drag and drop.</p></div>
+        <div class="step-card"><h2>Step 2: Set Your Lock</h2><div class="options-grid"><button id="password-btn" class="active">Password</button><button id="pin-btn">PIN</button><button id="no-lock-btn">No Lock</button></div><div id="lock-details"><div id="password-input-container" class="form-group"><label for="password">Password (min. 6 characters)</label><input type="password" id="password" placeholder="Enter a strong password"></div><div id="pin-input-container" class="form-group"><label for="pin">PIN (numeric only)</label><input type="text" id="pin" inputmode="numeric" pattern="[0-9]*" placeholder="Enter a numeric PIN"></div></div></div>
+        <div class="step-card"><h2>Step 3: Define Viewing Rules</h2><p style="margin-bottom: 1rem; color: var(--secondary-color);">Select one or more rules. Leave all unchecked for permanent access.</p><label class="rule-checkbox"><input type="checkbox" id="rule-view-once"><span><strong>View Once:</strong> File cannot be opened again after the first viewing.</span></label><label class="rule-checkbox"><input type="checkbox" id="rule-time-period"><span><strong>Time Period:</strong> Content is only viewable within a specific date range.</span></label><div id="time-period-container" class="form-group" style="padding-left: 2rem; margin-top: -0.5rem;"><div class="form-group"><label for="start-time">Start Date & Time</label><input type="datetime-local" id="start-time"></div><div class="form-group"><label for="end-time">End Date & Time</label><input type="datetime-local" id="end-time"></div></div><label class="rule-checkbox"><input type="checkbox" id="rule-self-destruct"><span><strong>Self-Destruct Timer:</strong> Images are permanently inaccessible after timer ends.</span></label><div class="form-group" id="self-destruct-container" style="padding-left: 2rem; margin-top: -0.5rem;"><input type="number" id="self-destruct-timer" placeholder="e.g., 10"></div></div>
+        <div class="step-card"><h2>Step 4: Add Creator Information (Optional)</h2><p style="margin-bottom: 1rem; color: var(--secondary-color);">This information will be visible to the recipient.</p><div class="form-group"><label for="owner-name">Owner Name</label><input type="text" id="owner-name" placeholder="Your Name"></div><div class="form-group"><label for="owner-email">Owner Email</label><input type="email" id="owner-email" placeholder="your.email@gmail.com"></div><div class="form-group"><label for="owner-call">Owner Phone</label><input type="tel" id="owner-call" placeholder="+91765432100"></div><div class="form-group"><label for="owner-note">Additional Note</label><textarea id="owner-note" placeholder="e.g., Here are the photos from our trip!"></textarea></div></div>
+        <div class="step-card"><h2>Step 5: Create File</h2><button id="create-file-btn" class="file-btn" disabled><span class="spinner"></span><span>Create Secure File</span></button><p id="progress-text"></p></div>
+        <footer class="footer"><p>Created by <strong><a href="https://github.com/chetanpatel0" target="_blank" rel="noopener">Chetan Patel</a></strong></p><div class="social-links"><a href="https://github.com/chetanpatel0" target="_blank" rel="noopener">GitHub</a> | <a href="patelchetan@pm.me">Email</a> | <a id="privacy-policy-link">Privacy Policy</a></div></footer>
+    </div>
+    
+    <div id="viewer-content"></div>
+    <div id="info-modal" class="modal-overlay"><div class="modal-content"><button class="modal-close" id="info-modal-close-btn">&times;</button><div id="info-modal-body"></div></div></div>
+    <div id="privacy-modal" class="modal-overlay"><div class="modal-content"><button class="modal-close" id="modal-close-btn">&times;</button><h2>Privacy Policy</h2><p><strong>Effective Date:</strong> August 24, 2025</p><p>Your privacy is critically important to us. BrainImage is designed with privacy as a core principle.</p><ul><li><strong>100% Offline:</strong> This application runs entirely in your web browser on your local device. It does not require an internet connection to function after the initial page load.</li><li><strong>No Data Transmission:</strong> Your images, passwords, PINs, and any generated files are never sent to, uploaded to, or stored on any external server. All processing happens locally on your computer or mobile device.</li><li><strong>No Tracking or Analytics:</strong> We do not collect any personal data, usage statistics, or analytics. There are no cookies, trackers, or third-party scripts that monitor your activity.</li><li><strong>You Are in Control:</strong> You are solely responsible for the secure files you create and share. We have no access to your content or your passwords. If you lose a password, it is not recoverable.</li></ul><p>In short, your data is your own. We never see it, touch it, or store it.</p></div></div>
+
+<script id="main-logic">
+(() => {
+    function onReady() {
+        const viewerDataElement = document.getElementById('imageData');
+        if (viewerDataElement && window.atob) {
+            document.getElementById('creator-app').style.display = 'none';
+            try {
+                const payload = JSON.parse(atob(viewerDataElement.textContent));
+                initializeViewer(payload);
+            } catch (e) { console.error("Failed to parse viewer data:", e); document.body.innerHTML = '<h2>Error: This file is corrupted.</h2>'; }
+        } else if (document.getElementById('creator-app')) {
+            initializeCreator();
+        }
+    }
+    if (document.readyState === "loading") document.addEventListener('DOMContentLoaded', onReady); else onReady();
+
+// --- CREATOR INITIALIZATION LOGIC ---
+function initializeCreator() {
+    const privacyModal = document.getElementById('privacy-modal');
+    document.getElementById('privacy-policy-link').addEventListener('click', () => privacyModal.classList.add('visible'));
+    document.getElementById('modal-close-btn').addEventListener('click', () => privacyModal.classList.remove('visible'));
+    privacyModal.addEventListener('click', e => { if (e.target === privacyModal) privacyModal.classList.remove('visible'); });
+    const gallery = document.getElementById('gallery'), createFileBtn = document.getElementById('create-file-btn'), progressText = document.getElementById('progress-text');
+    let uploadedFiles = [], lockType = 'password', selectedThumbnail = null;
+    document.getElementById('theme-checkbox').addEventListener('change', e => document.body.setAttribute('data-theme', e.target.checked ? 'dark' : 'light'));
+    Sortable.create(gallery, { animation: 150, onEnd: () => { const newOrder = Array.from(gallery.querySelectorAll('.thumbnail')).map(thumb => uploadedFiles.find(f => f.id === parseFloat(thumb.dataset.id))); uploadedFiles = newOrder; }});
+    const dropArea = document.getElementById('drop-area'), fileElem = document.getElementById('file-elem');
+    document.getElementById('select-files-btn').addEventListener('click', () => fileElem.click());
+    dropArea.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+    fileElem.addEventListener('change', e => handleFiles(e.target.files));
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => dropArea.addEventListener(eName, e => {e.preventDefault(); e.stopPropagation();}));
+    const MAX_DIMENSION = 1920, JPEG_QUALITY = 0.85;
+    function compressImage(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader(); reader.readAsDataURL(file);
+            reader.onload = event => {
+                const img = new Image(); img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); let { width, height } = img;
+                    if (width > height) { if (width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
+                    } else { if (height > MAX_DIMENSION) { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; } }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
+                }; img.onerror = reject;
+            }; reader.onerror = reject;
+        });
+    }
+    function handleFiles(files) { [...files].forEach(file => { if (file.type.startsWith('image/')) processAndAddFile(file); }); }
+    async function processAndAddFile(file) {
+        const fileData = { name: file.name, originalSize: file.size, id: Date.now() + Math.random(), isProcessing: true };
+        uploadedFiles.push(fileData); renderGallery();
+        try { const compressedDataUrl = await compressImage(file); fileData.dataUrl = compressedDataUrl; fileData.isProcessing = false;
+        } catch (error) { console.error("Failed to compress image:", error); uploadedFiles = uploadedFiles.filter(f => f.id !== fileData.id); }
+        renderGallery(); validateForm();
+    }
+    function renderGallery() { gallery.innerHTML = uploadedFiles.map(f => `<div class="thumbnail ${selectedThumbnail && selectedThumbnail.dataset.id == f.id ? 'selected' : ''}" data-id="${f.id}" tabindex="0">${f.isProcessing ? '<div class="thumb-spinner"></div>' : `<img src="${f.dataUrl}" alt="${f.name}"><button class="remove-btn" data-id="${f.id}">&times;</button>`}</div>`).join(''); gallery.querySelectorAll('.thumbnail').forEach(addThumbnailListeners); }
+    function addThumbnailListeners(thumb) { thumb.addEventListener('click', () => selectThumb(thumb)); const removeBtn = thumb.querySelector('.remove-btn'); if(removeBtn) { removeBtn.addEventListener('click', e => { e.stopPropagation(); uploadedFiles = uploadedFiles.filter(f => f.id !== parseFloat(e.target.dataset.id)); renderGallery(); validateForm(); }); } }
+    function selectThumb(thumb) { if (selectedThumbnail) selectedThumbnail.classList.remove('selected'); selectedThumbnail = thumb; selectedThumbnail.classList.add('selected'); selectedThumbnail.focus(); }
+    document.addEventListener('keydown', e => { if (!selectedThumbnail) return; const id = parseFloat(selectedThumbnail.dataset.id); const currentIndex = uploadedFiles.findIndex(f => f.id === id); const move = (offset) => { if (currentIndex + offset >= 0 && currentIndex + offset < uploadedFiles.length) { [uploadedFiles[currentIndex], uploadedFiles[currentIndex + offset]] = [uploadedFiles[currentIndex + offset], uploadedFiles[currentIndex]]; renderGallery(); selectThumb(gallery.querySelector(`[data-id='${id}']`)); } }; if (e.key === 'ArrowUp') move(-1); if (e.key === 'ArrowDown') move(1); });
+    const lockButtons = { password: document.getElementById('password-btn'), pin: document.getElementById('pin-btn'), none: document.getElementById('no-lock-btn') };
+    const setLockType = type => { lockType = type; for (const key in lockButtons) lockButtons[key].classList.toggle('active', key === type); document.getElementById('lock-details').style.display = type === 'none' ? 'none' : 'block'; document.getElementById('password-input-container').style.display = type === 'password' ? 'block' : 'none'; document.getElementById('pin-input-container').style.display = type === 'pin' ? 'block' : 'none'; validateForm(); };
+    Object.keys(lockButtons).forEach(key => lockButtons[key].addEventListener('click', () => setLockType(key)));
+    document.getElementById('rule-time-period').addEventListener('change', e => document.getElementById('time-period-container').style.display = e.target.checked ? 'block' : 'none');
+    document.getElementById('rule-self-destruct').addEventListener('change', e => document.getElementById('self-destruct-container').style.display = e.target.checked ? 'block' : 'none');
+    document.querySelectorAll('input, select, textarea').forEach(el => el.addEventListener('input', validateForm));
+    function validateForm() { let isValid = uploadedFiles.length > 0 && !uploadedFiles.some(f => f.isProcessing); if (lockType === 'password' && document.getElementById('password').value.length < 6) isValid = false; if (lockType === 'pin' && !/^\d+$/.test(document.getElementById('pin').value)) isValid = false; createFileBtn.disabled = !isValid; }
+    createFileBtn.addEventListener('click', generateSecureFile);
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+    function formatBytes(bytes, decimals = 2) { if (bytes === 0) return '0 Bytes'; const k = 1024; const dm = decimals < 0 ? 0 : decimals; const sizes = ['Bytes', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]; }
+    async function generateSecureFile() {
+        createFileBtn.classList.add('loading'); createFileBtn.disabled = true;
+        progressText.textContent = 'Preparing data...'; await delay(50);
+        const totalSize = uploadedFiles.reduce((sum, file) => sum + file.originalSize, 0);
+        const creatorInfo = { ownerName: document.getElementById('owner-name').value || 'Anonymous', createdDate: new Date().toISOString(), imageCount: uploadedFiles.length, totalSize: formatBytes(totalSize), ownerEmail: document.getElementById('owner-email').value, ownerCall: document.getElementById('owner-call').value, ownerNote: document.getElementById('owner-note').value };
+        const password = (lockType !== 'none') ? document.getElementById(lockType).value : 'brainimage-no-lock';
+        const rules = { viewOnce: document.getElementById('rule-view-once').checked, timePeriod: document.getElementById('rule-time-period').checked, startTime: document.getElementById('start-time').value, endTime: document.getElementById('end-time').value, selfDestruct: document.getElementById('rule-self-destruct').checked, destructTimer: document.getElementById('self-destruct-timer').value };
+        const dataToEncrypt = { images: uploadedFiles.map(f => ({ name: f.name, dataUrl: f.dataUrl })), rules };
+        progressText.textContent = 'Encrypting data...'; await delay(50);
+        const encryptedData = CryptoJS.AES.encrypt(JSON.stringify(dataToEncrypt), password).toString();
+        const finalPayload = { lockType, creatorInfo, encryptedData };
+        progressText.textContent = 'Generating HTML file...'; await delay(50);
+        try {
+            const viewerHTML = await createViewerHTML(finalPayload);
+            const blob = new Blob([viewerHTML], { type: 'text/html' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'brainimage.html'; a.click(); URL.revokeObjectURL(a.href);
+            progressText.textContent = 'File created successfully!';
+        } catch (error) { console.error("Failed to create file:", error); progressText.textContent = 'Error: Could not create file.'; alert("Error creating file. Please check your internet connection and try again."); } 
+        finally { createFileBtn.classList.remove('loading'); validateForm(); }
+    }
+    let cryptoJsCache, sortableJsCache;
+    const fetchLib = async (url, cache) => { if (cache) return cache; const r = await fetch(url); if (!r.ok) throw new Error(`Failed to fetch ${url}`); return r.text(); };
+    async function createViewerHTML(payload) {
+        const [cryptoLib, sortableLib] = await Promise.all([ fetchLib('https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js', cryptoJsCache), fetchLib('https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js', sortableJsCache) ]);
+        const styleContent = document.getElementById('main-style').textContent; const scriptContent = document.getElementById('main-logic').textContent; const encodedPayload = btoa(JSON.stringify(payload));
+        return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"><title>BrainImage Viewer</title><style id="main-style">${styleContent}</style></head><body><div id="creator-app" style="display:none;"></div><div id="viewer-content"></div><div id="info-modal" class="modal-overlay"><div class="modal-content"><button class="modal-close" id="info-modal-close-btn">&times;</button><div id="info-modal-body"></div></div></div><script id="imageData" type="application/json">${encodedPayload}<\/script><script>${cryptoLib}<\/script><script>${sortableLib}<\/script><script id="main-logic">${scriptContent}<\/script></body></html>`;
+    }
+}
+
+// --- VIEWER INITIALIZATION LOGIC ---
+function initializeViewer(payload) {
+    const { lockType, creatorInfo, encryptedData } = payload;
+    const viewerContent = document.getElementById('viewer-content');
+    document.body.className = 'viewer-body';
+    
+    const uniqueFileId = encryptedData.substring(0, 30);
+    const timeAnchorId = "anchor_" + uniqueFileId;
+    const storedAnchor = localStorage.getItem(timeAnchorId);
+    const now = new Date();
+    if (!storedAnchor) { localStorage.setItem(timeAnchorId, now.toISOString()); } 
+    else { if (now < new Date(storedAnchor)) { document.body.innerHTML = `<div class="viewer-body"><div class="message-container"><h2>Access Denied</h2><p>System clock tampering detected. Please set your device's time to the correct date to continue.</p></div></div>`; return; } }
+
+    const requestFullScreen = () => { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen(); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); };
+    const exitFullScreen = () => { if (document.fullscreenElement || document.webkitFullscreenElement) { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } };
+    const getInfoHtml = (info) => !info ? '' : `<div class="creator-info-box"><h3>File Information</h3><p><strong>Owner:</strong> ${info.ownerName || 'N/A'}</p><p><strong>Created:</strong> ${new Date(info.createdDate).toLocaleString()}</p><p><strong>Contains:</strong> ${info.imageCount} images (${info.totalSize})</p>${info.ownerEmail ? `<p><strong>Email:</strong> <a href="mailto:${info.ownerEmail}">${info.ownerEmail}</a></p>` : ''}${info.ownerCall ? `<p><strong>Phone:</strong> <a href="tel:${info.ownerCall}">${info.ownerCall}</a></p>` : ''}${info.ownerNote ? `<p><strong>Note:</strong></p><p style="white-space: pre-wrap; word-break: break-word;">${info.ownerNote}</p>` : ''}</div>`;
+    
+    function decryptAndShow(key) {
+        try { const decryptedString = CryptoJS.AES.decrypt(encryptedData, key).toString(CryptoJS.enc.Utf8); if (!decryptedString) throw new Error("Invalid decryption"); enforceRulesAndDisplay(JSON.parse(decryptedString)); return true;
+        } catch (error) { console.error("Decryption failed:", error); return false; }
+    }
+    
+    function showMessage(message, info) { viewerContent.innerHTML = `<div class="message-container"><h2>Access Denied</h2><p>${message}</p>${getInfoHtml(info)}</div>`; }
+
+    function enforceRulesAndDisplay(decryptedPayload) {
+        const { rules } = decryptedPayload; const viewedFlagId = "viewed_" + uniqueFileId; const destructedFlagId = "destructed_" + uniqueFileId;
+        if (rules.viewOnce && localStorage.getItem(viewedFlagId)) return showMessage("This content has already been viewed and is no longer available.", creatorInfo);
+        if (rules.selfDestruct && localStorage.getItem(destructedFlagId)) return showMessage("This content has self-destructed and is no longer available.", creatorInfo);
+        if (rules.timePeriod) { const start = new Date(rules.startTime), end = new Date(rules.endTime); if (now < start) return showMessage(`Content not available until ${start.toLocaleString()}.`, creatorInfo); if (now > end) return showMessage(`The viewing period expired on ${end.toLocaleString()}.`, creatorInfo); }
+        if (rules.viewOnce) localStorage.setItem(viewedFlagId, 'true');
+        displayImages(decryptedPayload, destructedFlagId);
+    }
+
+    function displayImages(decryptedPayload, destructedFlagId) {
+        const { images, rules } = decryptedPayload; let currentIndex = 0; let currentRotation = 0;
+        viewerContent.innerHTML = `<div class="viewer-gallery">
+            <div class="viewer-header"><div class="header-left-controls"><button id="info-icon" class="icon-btn" title="Show Info">ⓘ</button></div><span id="image-name"></span><div class="header-right-controls">${rules.selfDestruct ? `<span id="timer"></span>` : ''}<button id="rotate-btn" class="icon-btn" title="Rotate Clockwise">↻</button><button id="close-viewer" class="icon-btn" title="Close Viewer">&times;</button></div></div>
+            <div class="viewer-image-wrapper"><img id="current-image" src="" alt="Secured Image"></div>
+            <div class="viewer-controls"><button id="prev-btn" class="nav-btn" title="Previous">&lt;</button><div class="zoom-controls"><button id="zoom-out-btn" class="nav-btn" title="Zoom Out">-</button><button id="zoom-reset-btn" class="nav-btn" title="Reset Zoom">⛶</button><button id="zoom-in-btn" class="nav-btn" title="Zoom In">+</button></div><button id="next-btn" class="nav-btn" title="Next">&gt;</button></div>
+            </div>`;
+        requestFullScreen();
+        const gallery = viewerContent.querySelector('.viewer-gallery'); gallery.style.display = 'flex';
+        const imgWrapper = document.querySelector('.viewer-image-wrapper'), imgEl = document.getElementById('current-image'), nameEl = document.getElementById('image-name');
+        const prevBtn = document.getElementById('prev-btn'), nextBtn = document.getElementById('next-btn');
+        let scale = 1, panning = false, pointX = 0, pointY = 0, start = { x: 0, y: 0 };
+        const setTransform = () => { imgEl.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale}) rotate(${currentRotation}deg)`; };
+        const resetZoomAndRotation = () => { scale = 1; pointX = 0; pointY = 0; currentRotation = 0; setTransform(); };
+        const showImage = index => { resetZoomAndRotation(); imgEl.src = images[index].dataUrl; nameEl.textContent = `${index + 1} / ${images.length} - ${images[index].name}`; prevBtn.disabled = index === 0; nextBtn.disabled = index === images.length - 1; };
+        const move = offset => { const newIndex = currentIndex + offset; if (newIndex >= 0 && newIndex < images.length) { currentIndex = newIndex; showImage(currentIndex); } };
+        prevBtn.addEventListener('click', () => move(-1)); nextBtn.addEventListener('click', () => move(1));
+        document.getElementById('rotate-btn').addEventListener('click', () => { currentRotation = (currentRotation + 90) % 360; setTransform(); });
+        document.getElementById('zoom-in-btn').addEventListener('click', () => { scale = Math.min(scale * 1.2, 5); setTransform(); });
+        document.getElementById('zoom-out-btn').addEventListener('click', () => { scale = Math.max(scale / 1.2, 0.5); setTransform(); });
+        document.getElementById('zoom-reset-btn').addEventListener('click', resetZoomAndRotation);
+        imgWrapper.onmousedown = e => { e.preventDefault(); start = { x: e.clientX - pointX, y: e.clientY - pointY }; panning = true; };
+        imgWrapper.onmouseup = () => { panning = false; };
+        imgWrapper.onmousemove = e => { if (!panning) return; pointX = (e.clientX - start.x); pointY = (e.clientY - start.y); setTransform(); };
+        imgWrapper.onwheel = e => { e.preventDefault(); const xs = (e.clientX - pointX) / scale, ys = (e.clientY - pointY) / scale, delta = (e.wheelDelta ? e.wheelDelta : -e.deltaY); (delta > 0) ? (scale *= 1.2) : (scale /= 1.2); scale = Math.max(0.5, Math.min(scale, 5)); pointX = e.clientX - xs * scale; pointY = e.clientY - ys * scale; setTransform(); };
+        const getDistance = (p1, p2) => Math.sqrt(Math.pow(p2.clientX - p1.clientX, 2) + Math.pow(p2.clientY - p1.clientY, 2));
+        let startDist = 0, startScale = 1;
+        imgWrapper.addEventListener('touchstart', e => { if (e.touches.length === 2) { startDist = getDistance(e.touches[0], e.touches[1]); startScale = scale; } if(e.touches.length === 1) { start = { x: e.touches[0].clientX - pointX, y: e.touches[0].clientY - pointY }; panning = true;} });
+        imgWrapper.addEventListener('touchmove', e => { e.preventDefault(); if (e.touches.length === 2) { const newDist = getDistance(e.touches[0], e.touches[1]); const ratio = newDist / startDist; scale = Math.max(0.5, Math.min(startScale * ratio, 5)); setTransform(); } if(e.touches.length === 1 && panning) { pointX = e.touches[0].clientX - start.x; pointY = e.touches[0].clientY - start.y; setTransform(); } });
+        imgWrapper.addEventListener('touchend', () => { panning = false; startDist = 0; });
+        const closeViewer = () => { exitFullScreen(); viewerContent.innerHTML = ''; };
+        document.getElementById('close-viewer').addEventListener('click', closeViewer);
+        document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') move(-1); if (e.key === 'ArrowRight') move(1); if (e.key === 'Escape') closeViewer(); });
+        const infoModal = document.getElementById('info-modal'), infoBody = document.getElementById('info-modal-body'); infoBody.innerHTML = getInfoHtml(creatorInfo);
+        document.getElementById('info-icon').addEventListener('click', () => infoModal.classList.add('visible'));
+        document.getElementById('info-modal-close-btn').addEventListener('click', () => infoModal.classList.remove('visible'));
+        infoModal.addEventListener('click', e => { if (e.target === infoModal) infoModal.classList.remove('visible'); });
+        showImage(0);
+        if (rules.selfDestruct) {
+            let timeLeft = parseInt(rules.destructTimer, 10) || 10;
+            const timerEl = document.getElementById('timer');
+            const updateTimer = () => timerEl.textContent = `${timeLeft}s`;
+            updateTimer();
+            const interval = setInterval(() => { timeLeft--; updateTimer(); if (timeLeft <= 0) { clearInterval(interval); localStorage.setItem(destructedFlagId, 'true'); exitFullScreen(); infoModal.remove(); showMessage("The viewing time has expired. This content has self-destructed.", creatorInfo); } }, 1000);
+        }
+    }
+
+    if (lockType === 'none') {
+        if (!decryptAndShow('brainimage-no-lock')) { showMessage("This file appears to be corrupted.", creatorInfo); }
+    } else {
+        viewerContent.innerHTML = `<div class="unlock-container"><h2>Unlock Content</h2><p>Enter the ${lockType.toUpperCase()} to view.</p><div class="form-group"><input type="${lockType === 'password' ? 'password' : 'text'}" id="unlock-input" placeholder="Enter ${lockType}" ${lockType === 'pin' ? 'inputmode="numeric"' : ''}></div><button class="file-btn" id="unlock-btn"><span class="spinner"></span><span>Unlock</span></button><p id="error-msg" style="color: var(--danger-color); margin-top: 1rem;"></p>${getInfoHtml(creatorInfo)}</div>`;
+        const unlockInput = document.getElementById('unlock-input'), unlockBtn = document.getElementById('unlock-btn');
+        unlockInput.focus();
+        async function attemptUnlockFromUI(key) {
+            if (!key || unlockBtn.disabled) return;
+            unlockBtn.disabled = true; unlockInput.disabled = true; unlockBtn.classList.add('loading');
+            const errorMsg = document.getElementById('error-msg');
+            if (errorMsg) errorMsg.textContent = '';
+            await new Promise(res => setTimeout(res, 250));
+            const success = decryptAndShow(key);
+            if (!success) {
+                if (errorMsg) errorMsg.textContent = "Incorrect Password or PIN.";
+                unlockBtn.disabled = false; unlockInput.disabled = false; unlockBtn.classList.remove('loading');
+                unlockInput.value = ''; unlockInput.focus();
+            }
+        }
+        unlockBtn.addEventListener('click', () => attemptUnlockFromUI(unlockInput.value));
+        unlockInput.addEventListener('keypress', e => { if (e.key === 'Enter' && !unlockBtn.disabled) attemptUnlockFromUI(unlockInput.value); });
+    }
+}
+})();
+</script>
+</body>
+</html>
